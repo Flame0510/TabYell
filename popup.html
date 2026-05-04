@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TabShame</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <div class="header-left">
+          <h1>TabShame 😤</h1>
+          <p class="subtitle">Dignità del browser: in osservazione</p>
+        </div>
+        <button id="settingsToggle" class="settings-btn" title="Gestione estensione">⚙️</button>
+      </header>
+
+      <section class="count-wrap">
+        <div id="tabCount" class="count">0</div>
+        <div class="count-label">tab aperte</div>
+      </section>
+
+      <section class="meter-wrap">
+        <div class="meter-track">
+          <div id="meterFill" class="meter-fill"></div>
+        </div>
+        <div id="meterHint" class="meter-hint">Sotto controllo</div>
+      </section>
+
+      <section class="controls">
+        <label class="row toggle-row">
+          <span>Estensione attiva</span>
+          <input id="enabled" type="checkbox" />
+        </label>
+
+        <label class="row" for="threshold">
+          <span>Soglia: <strong id="thresholdValue">15</strong> tab</span>
+        </label>
+        <input id="threshold" type="range" min="1" max="50" step="1" value="15" />
+
+        <label class="row" for="language">
+          <span>Lingua voce</span>
+        </label>
+        <select id="language">
+          <option value="it">🇮🇹 Italiano</option>
+          <option value="en">🇬🇧 English</option>
+        </select>
+
+        <label class="row" for="phraseMode">
+          <span>Stile frasi</span>
+        </label>
+        <select id="phraseMode">
+          <option value="both">🎲 Misto</option>
+          <option value="with-count">🔢 Con numero di tab</option>
+          <option value="without-count">💬 Senza numero</option>
+        </select>
+      </section>
+
+      <section class="stats">
+        <span>Vergogne subite:</span>
+        <strong id="totalShames">0</strong>
+      </section>
+
+      <button id="shameNow" class="shame-btn">😤 Fammi vergognare adesso</button>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
