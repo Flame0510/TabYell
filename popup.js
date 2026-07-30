@@ -7,8 +7,8 @@ const el = {
   thresholdValue: document.getElementById('thresholdValue'),
   language: document.getElementById('language'),
   phraseMode: document.getElementById('phraseMode'),
-  totalShames: document.getElementById('totalShames'),
-  shameNow: document.getElementById('shameNow'),
+  totalYells: document.getElementById('totalYells'),
+  yellNow: document.getElementById('yellNow'),
   settingsToggle: document.getElementById('settingsToggle'),
   subtitle: document.querySelector('.subtitle')
 };
@@ -18,7 +18,7 @@ let currentState = {
   language: 'it',
   phraseMode: 'both',
   enabled: true,
-  totalShames: 0,
+  totalYells: 0,
   cooldownUntil: 0,
   lastTabCount: 0
 };
@@ -36,23 +36,23 @@ function updateMeter(tabCount, threshold) {
 
   if (over) {
     el.meterFill.style.background = 'var(--bad)';
-    el.meterHint.textContent = 'Soglia superata: modalità drama';
+    el.meterHint.textContent = 'Soglia superata: TabYell è sveglio';
   } else if (near) {
     el.meterFill.style.background = 'var(--warn)';
-    el.meterHint.textContent = 'Quasi al limite: chiudi qualcosa';
+    el.meterHint.textContent = 'Attento: sta per partire';
   } else {
     el.meterFill.style.background = 'var(--good)';
-    el.meterHint.textContent = 'Sotto controllo';
+    el.meterHint.textContent = 'Tutto tranquillo';
   }
 }
 
-function triggerShameFlash() {
-  el.tabCount.classList.remove('shamed');
-  // Force reflow so the animation restarts even if already shamed
+function triggerYellPulse() {
+  el.tabCount.classList.remove('yelled');
+  // Force reflow so the animation restarts even if already yelled
   void el.tabCount.offsetWidth;
-  el.tabCount.classList.add('shamed');
+  el.tabCount.classList.add('yelled');
   el.tabCount.addEventListener('animationend', () => {
-    el.tabCount.classList.remove('shamed');
+    el.tabCount.classList.remove('yelled');
   }, { once: true });
 }
 
@@ -61,27 +61,27 @@ function render(state, flash = false) {
   const tabCount = currentState.lastTabCount || 0;
 
   el.tabCount.textContent = String(tabCount);
-  if (flash) triggerShameFlash();
+  if (flash) triggerYellPulse();
   el.enabled.checked = !!currentState.enabled;
   el.threshold.value = String(currentState.threshold);
   el.thresholdValue.textContent = String(currentState.threshold);
   el.language.value = currentState.language;
   el.phraseMode.value = currentState.phraseMode || 'both';
-  el.totalShames.textContent = String(currentState.totalShames || 0);
+  el.totalYells.textContent = String(currentState.totalYells || 0);
   updateMeter(tabCount, currentState.threshold);
 
   // Dynamic subtitle based on state
   const t = currentState.threshold;
   if (!currentState.enabled) {
-    el.subtitle.textContent = 'Estensione disattivata. Vergogna sospesa.';
+    el.subtitle.textContent = 'TabYell dorme. Per ora.';
   } else if (tabCount >= t + 25) {
-    el.subtitle.textContent = 'Situazione fuori controllo. Urgente.';
+    el.subtitle.textContent = 'TabYell sta per perdere la voce.';
   } else if (tabCount >= t) {
-    el.subtitle.textContent = 'Soglia superata. Modalità drama attiva.';
+    el.subtitle.textContent = 'Hai superato la soglia. Preparati.';
   } else if (tabCount >= t - 2) {
-    el.subtitle.textContent = 'Quasi al limite. Stai attento.';
+    el.subtitle.textContent = 'Ancora una tab e TabYell parte.';
   } else {
-    el.subtitle.textContent = 'Dignità del browser: in osservazione.';
+    el.subtitle.textContent = 'Silenzio sospetto. Per ora.';
   }
 }
 
@@ -123,8 +123,8 @@ el.settingsToggle.addEventListener('click', () => {
   chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
 });
 
-el.shameNow.addEventListener('click', async () => {
-  const response = await send({ type: 'SHAME_NOW' });
+el.yellNow.addEventListener('click', async () => {
+  const response = await send({ type: 'YELL_NOW' });
   if (response?.ok) render(response.state, true);
 });
 
@@ -133,8 +133,8 @@ chrome.runtime.onMessage.addListener((message) => {
     render({ ...currentState, lastTabCount: message.tabCount });
   }
   if (message?.type === 'STATE_UPDATED' && message.state) {
-    const wasShamed = message.state.totalShames > (currentState.totalShames || 0);
-    render(message.state, wasShamed);
+    const wasYelled = message.state.totalYells > (currentState.totalYells || 0);
+    render(message.state, wasYelled);
   }
 });
 
