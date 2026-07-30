@@ -10,9 +10,14 @@ TabYell è un'estensione Chrome Manifest V3 che conta le tab aperte e interviene
 
 - apertura sopra soglia → battuta vocale;
 - chiusura mentre si era sopra soglia → frase di sollievo;
+- eventi rapidi accorpati in una sola valutazione;
+- cooldown automatico di 60 secondi;
 - badge verde, arancione o rosso con il numero di tab;
 - popup con contatore, soglia, lingua, stile delle frasi e attivazione rapida;
-- frasi e interfaccia disponibili in italiano e inglese;\n- italiano automatico per browser italiani, inglese come fallback globale;\n- override manuale della lingua dal popup;\n- selezione automatica della migliore voce TTS installata per la lingua scelta.
+- interfaccia e frasi disponibili in italiano e inglese;
+- italiano automatico per browser italiani, inglese come fallback globale;
+- override manuale della lingua vocale dal popup;
+- selezione automatica della voce TTS compatibile con punteggio migliore.
 
 ## Struttura
 
@@ -22,29 +27,37 @@ background.js       Stato, conteggio tab, badge, frasi e chrome.tts
 popup.html          Interfaccia del popup
 popup.css           Identità visiva TabYell
 popup.js            Stato e interazioni del popup
+_locales/           Cataloghi inglese e italiano
 icons/              Icone dell'estensione
-content.js          Placeholder per future reazioni visive
+tests/              Validazione statica e test del service worker
+content.js          Placeholder non registrato nel manifest
 offscreen.js        Implementazione speechSynthesis legacy, non registrata
 voices/phrases.js   Raccolta frasi legacy, non caricata dal manifest
 ```
 
-## Architettura attuale
+## Architettura vocale
 
 La voce viene riprodotta dal service worker tramite `chrome.tts`. Non sono richiesti accessi ai contenuti delle pagine e il manifest non richiede host permissions.
 
 ```text
-chrome.tabs.onCreated  → enqueueYell('up')   → voce se sopra soglia
-chrome.tabs.onRemoved  → enqueueYell('down') → sollievo se necessario
-chrome.tabs.onActivated → aggiorna badge e popup
-popup: YELL_NOW        → handleYell(..., true)
+chrome.tabs.onCreated/onRemoved
+        ↓
+debounce 350 ms e accorpamento eventi
+        ↓
+controllo soglia e cooldown
+        ↓
+selezione voce e chrome.tts.speak
 ```
+
+Il pulsante `YELL_NOW` bypassa il cooldown, annulla l'evento automatico pendente e riceve risposta immediata nel popup. Gli eventi automatici non possono accumulare un backlog: viene conservata al massimo una direzione pendente.
 
 ## Stato persistito
 
 ```js
 {
   threshold: 15,
-  language: 'it',
+  language: 'en',
+  languageMode: 'auto',
   enabled: true,
   totalYells: 0,
   cooldownUntil: 0,
@@ -53,17 +66,34 @@ popup: YELL_NOW        → handleYell(..., true)
 }
 ```
 
-Durante l'aggiornamento dalla versione precedente, `totalShames` viene migrato automaticamente in `totalYells`, così le statistiche dell'utente non vengono perse. Le installazioni legacy che avevano il vecchio default italiano passano alla lingua del browser; una scelta inglese esplicita su browser italiano viene preservata.
+Durante l'aggiornamento dalla versione precedente, `totalShames` viene migrato automaticamente in `totalYells`. Le installazioni legacy con il vecchio default italiano passano alla lingua del browser; una scelta inglese esplicita su browser italiano viene preservata.
+
+## Lingua
+
+- Chrome con UI italiana → interfaccia italiana e voce automatica italiana.
+- Qualsiasi altra UI → interfaccia inglese e voce automatica inglese.
+- L'override manuale cambia la voce, non la lingua dell'interfaccia.
+
+## Voci e privacy
+
+La selezione segue una policy quality-first e consente le voci remote esposte da Chrome. TabYell non legge URL, titoli o contenuti delle pagine e non possiede un server. Se Chrome seleziona un motore remoto, la frase generata — eventualmente comprensiva del numero totale di tab — può essere elaborata in rete dal provider della voce.
+
+Il service worker registra nome, lingua e natura locale/remota della voce scelta.
 
 ## Controlli prima di una release
 
-1. Caricare la cartella da `chrome://extensions` in modalità sviluppatore.
-2. Verificare l'upgrade sopra una versione già installata e la migrazione del contatore.
-3. Testare apertura e chiusura rapida di più tab su Chrome e Arc.
-4. Provare un browser italiano e uno non italiano, la modalità automatica e gli override manuali.\n5. Controllare nei log del service worker quale voce TTS è stata scelta e ascoltare l'inglese.\n6. Provare tutte le modalità delle frasi.
-5. Controllare badge, soglia, toggle e pulsante “Sgridami adesso”.
-6. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
-7. Pubblicare la versione 1.2.0 mantenendo lo stesso extension ID.
+1. Eseguire `node tests/validate-extension.mjs`.
+2. Verificare che GitHub Actions completi il workflow **Validate extension**.
+3. Caricare la cartella da `chrome://extensions` in modalità sviluppatore.
+4. Verificare l'upgrade sopra una versione già installata e la migrazione del contatore.
+5. Aprire rapidamente molte tab e confermare che parta una sola frase.
+6. Confermare che durante il cooldown non partano nuove frasi automatiche.
+7. Provare un browser italiano e uno non italiano, la modalità automatica e gli override manuali.
+8. Premere **Sgridami adesso** e verificare feedback immediato e priorità sulla voce automatica.
+9. Controllare nel log del service worker quale voce TTS è stata scelta.
+10. Provare tutte le modalità delle frasi e verificare badge, soglia e toggle.
+11. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
+12. Pubblicare la versione 1.2.0 mantenendo lo stesso extension ID.
 
 ## Identità
 
