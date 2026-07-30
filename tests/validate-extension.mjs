@@ -5,6 +5,15 @@ import vm from 'node:vm';
 const root = new URL('../', import.meta.url);
 const read = (path) => readFile(new URL(path, root), 'utf8');
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function waitFor(predicate, message, timeout = 1000) {
+  const startedAt = Date.now();
+  while (!predicate()) {
+    if (Date.now() - startedAt >= timeout) {
+      assert.fail(message);
+    }
+    await wait(10);
+  }
+}
 
 const [
   manifestSource,
@@ -214,7 +223,10 @@ function createBackgroundHarness({
   harness.listeners.created();
   harness.listeners.created();
   harness.listeners.created();
-  await wait(80);
+  await waitFor(
+    () => harness.state.totalYells === 1,
+    'Automatic yell did not complete'
+  );
 
   assert.equal(harness.spoken.length, 1, 'Rapid tab events must be coalesced');
   assert.equal(harness.state.totalYells, 1);
@@ -234,7 +246,10 @@ function createBackgroundHarness({
   assert.equal(response.ok, true);
   assert.equal(response.queued, true);
   assert.ok(Date.now() - startedAt < 100, 'Manual response should be immediate');
-  await wait(40);
+  await waitFor(
+    () => harness.state.totalYells === 2,
+    'Manual yell did not complete'
+  );
   assert.equal(harness.spoken.length, 2, 'Manual speech must bypass cooldown');
 }
 
@@ -257,7 +272,10 @@ function createBackgroundHarness({
     ]
   });
   await harness.sendMessage({ type: 'YELL_NOW' });
-  await wait(40);
+  await waitFor(
+    () => harness.spoken.length === 1,
+    'Remote voice test did not speak'
+  );
   assert.equal(harness.spoken[0].options.voiceName, 'Google US English');
 }
 
