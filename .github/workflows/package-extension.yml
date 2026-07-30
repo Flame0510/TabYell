@@ -1,0 +1,85 @@
+name: Package extension
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.package.outputs.version }}
+      zip_name: ${{ steps.package.outputs.zip_name }}
+      checksum_name: ${{ steps.package.outputs.checksum_name }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate extension
+        run: node tests/validate-extension.mjs
+
+      - name: Build Chrome package
+        id: package
+        run: bash scripts/package-extension.sh
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabyell-${{ steps.package.outputs.version }}
+          path: |
+            ${{ steps.package.outputs.zip_path }}
+            ${{ steps.package.outputs.checksum_path }}
+          if-no-files-found: error
+          retention-days: 90
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packaged artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tabyell-${{ needs.package.outputs.version }}
+          path: release-assets
+
+      - name: Verify tag matches manifest version
+        env:
+          EXTENSION_VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" != "v$EXTENSION_VERSION" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $EXTENSION_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXTENSION_VERSION: ${{ needs.package.outputs.version }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" release-assets/* \
+              --generate-notes \
+              --title "TabYell $EXTENSION_VERSION"
+          fi
