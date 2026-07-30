@@ -1,3 +1,36 @@
+function t(key) {
+  return chrome.i18n.getMessage(key) || key;
+}
+
+function getBrowserVoiceLanguage() {
+  const locale = chrome.i18n.getUILanguage?.() || chrome.i18n.getMessage('@@ui_locale') || 'en';
+  return locale.toLowerCase().replace('_', '-').startsWith('it') ? 'it' : 'en';
+}
+
+function localizePopup() {
+  const browserLanguage = getBrowserVoiceLanguage();
+  document.documentElement.lang = browserLanguage;
+  document.title = t('extensionName');
+
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
+  });
+
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((node) => {
+    node.setAttribute('aria-label', t(node.dataset.i18nAriaLabel));
+  });
+
+  const autoOption = document.getElementById('languageAuto');
+  const detectedLanguage = browserLanguage === 'it' ? 'Italiano' : 'English';
+  autoOption.textContent = `🌐 ${t('languageAuto')} (${detectedLanguage})`;
+}
+
+localizePopup();
+
 const el = {
   tabCount: document.getElementById('tabCount'),
   meterFill: document.getElementById('meterFill'),
@@ -7,18 +40,19 @@ const el = {
   thresholdValue: document.getElementById('thresholdValue'),
   language: document.getElementById('language'),
   phraseMode: document.getElementById('phraseMode'),
-  totalShames: document.getElementById('totalShames'),
-  shameNow: document.getElementById('shameNow'),
+  totalYells: document.getElementById('totalYells'),
+  yellNow: document.getElementById('yellNow'),
   settingsToggle: document.getElementById('settingsToggle'),
   subtitle: document.querySelector('.subtitle')
 };
 
 let currentState = {
   threshold: 15,
-  language: 'it',
+  language: getBrowserVoiceLanguage(),
+  languageMode: 'auto',
   phraseMode: 'both',
   enabled: true,
-  totalShames: 0,
+  totalYells: 0,
   cooldownUntil: 0,
   lastTabCount: 0
 };
@@ -36,23 +70,22 @@ function updateMeter(tabCount, threshold) {
 
   if (over) {
     el.meterFill.style.background = 'var(--bad)';
-    el.meterHint.textContent = 'Soglia superata: modalità drama';
+    el.meterHint.textContent = t('meterOver');
   } else if (near) {
     el.meterFill.style.background = 'var(--warn)';
-    el.meterHint.textContent = 'Quasi al limite: chiudi qualcosa';
+    el.meterHint.textContent = t('meterNear');
   } else {
     el.meterFill.style.background = 'var(--good)';
-    el.meterHint.textContent = 'Sotto controllo';
+    el.meterHint.textContent = t('meterFine');
   }
 }
 
-function triggerShameFlash() {
-  el.tabCount.classList.remove('shamed');
-  // Force reflow so the animation restarts even if already shamed
+function triggerYellPulse() {
+  el.tabCount.classList.remove('yelled');
   void el.tabCount.offsetWidth;
-  el.tabCount.classList.add('shamed');
+  el.tabCount.classList.add('yelled');
   el.tabCount.addEventListener('animationend', () => {
-    el.tabCount.classList.remove('shamed');
+    el.tabCount.classList.remove('yelled');
   }, { once: true });
 }
 
@@ -61,27 +94,26 @@ function render(state, flash = false) {
   const tabCount = currentState.lastTabCount || 0;
 
   el.tabCount.textContent = String(tabCount);
-  if (flash) triggerShameFlash();
+  if (flash) triggerYellPulse();
   el.enabled.checked = !!currentState.enabled;
   el.threshold.value = String(currentState.threshold);
   el.thresholdValue.textContent = String(currentState.threshold);
-  el.language.value = currentState.language;
+  el.language.value = currentState.languageMode === 'auto' ? 'auto' : currentState.language;
   el.phraseMode.value = currentState.phraseMode || 'both';
-  el.totalShames.textContent = String(currentState.totalShames || 0);
+  el.totalYells.textContent = String(currentState.totalYells || 0);
   updateMeter(tabCount, currentState.threshold);
 
-  // Dynamic subtitle based on state
-  const t = currentState.threshold;
+  const threshold = currentState.threshold;
   if (!currentState.enabled) {
-    el.subtitle.textContent = 'Estensione disattivata. Vergogna sospesa.';
-  } else if (tabCount >= t + 25) {
-    el.subtitle.textContent = 'Situazione fuori controllo. Urgente.';
-  } else if (tabCount >= t) {
-    el.subtitle.textContent = 'Soglia superata. Modalità drama attiva.';
-  } else if (tabCount >= t - 2) {
-    el.subtitle.textContent = 'Quasi al limite. Stai attento.';
+    el.subtitle.textContent = t('subtitleDisabled');
+  } else if (tabCount >= threshold + 25) {
+    el.subtitle.textContent = t('subtitleCritical');
+  } else if (tabCount >= threshold) {
+    el.subtitle.textContent = t('subtitleOver');
+  } else if (tabCount >= threshold - 2) {
+    el.subtitle.textContent = t('subtitleNear');
   } else {
-    el.subtitle.textContent = 'Dignità del browser: in osservazione.';
+    el.subtitle.textContent = t('subtitleFine');
   }
 }
 
@@ -109,7 +141,11 @@ el.threshold.addEventListener('change', async () => {
 });
 
 el.language.addEventListener('change', async () => {
-  const response = await send({ type: 'UPDATE_SETTINGS', language: el.language.value });
+  const selectedLanguage = el.language.value;
+  const message = selectedLanguage === 'auto'
+    ? { type: 'UPDATE_SETTINGS', languageMode: 'auto' }
+    : { type: 'UPDATE_SETTINGS', language: selectedLanguage, languageMode: 'manual' };
+  const response = await send(message);
   if (response?.ok) render(response.state);
 });
 
@@ -118,14 +154,16 @@ el.phraseMode.addEventListener('change', async () => {
   if (response?.ok) render(response.state);
 });
 
-// Opens the extension management page using the current extension's own ID
 el.settingsToggle.addEventListener('click', () => {
   chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
 });
 
-el.shameNow.addEventListener('click', async () => {
-  const response = await send({ type: 'SHAME_NOW' });
-  if (response?.ok) render(response.state, true);
+el.yellNow.addEventListener('click', async () => {
+  const response = await send({ type: 'YELL_NOW' });
+  if (response?.ok) {
+    render(response.state);
+    if (response.queued) triggerYellPulse();
+  }
 });
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -133,8 +171,9 @@ chrome.runtime.onMessage.addListener((message) => {
     render({ ...currentState, lastTabCount: message.tabCount });
   }
   if (message?.type === 'STATE_UPDATED' && message.state) {
-    const wasShamed = message.state.totalShames > (currentState.totalShames || 0);
-    render(message.state, wasShamed);
+    const wasYelled = message.state.totalYells > (currentState.totalYells || 0);
+    const shouldPulse = wasYelled && message.source !== 'manual';
+    render(message.state, shouldPulse);
   }
 });
 

@@ -1,3 +1,3 @@
-// TabShame content script
-// Speech is now injected directly via chrome.scripting.executeScript from background.js
-// This file is kept for future use (e.g. visual overlays, DOM interactions)
+// TabYell content script placeholder.
+// Speech is handled by the background service worker through chrome.tts.
+// This file is reserved for future visual reactions or page-level interactions.

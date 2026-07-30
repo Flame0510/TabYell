@@ -1,171 +1,104 @@
-# TabShame — Handover Document
-**Versione attuale:** 0.7  
-**Data:** 2026-04-03  
-**Autore:** Claw (OpenClaw VPS) → Handover a OpenClaw locale Mac
+# TabYell — Handover
 
----
+**Versione:** 1.2.0  
+**Brand:** TabYell  
+**Tagline:** Open too many tabs. Your browser yells at you.
 
-## Cos'è TabShame
+## Prodotto
 
-Estensione Chrome (Manifest V3) che conta i tab aperti e reagisce con la voce:
-- **Tab aperta sopra soglia** → voce che ti vergogna (tono sarcastico/deluso)
-- **Tab chiusa quando eri sopra soglia** → voce che ti ringrazia/prende in giro
-- **Badge sull'icona** → numero tab in tempo reale (verde/arancione/rosso)
-- **Popup** → counter live, toggle on/off, slider soglia, selector lingua 🇮🇹/🇬🇧, bottone "Fammi vergognare adesso"
+TabYell è un'estensione Chrome Manifest V3 che conta le tab aperte e interviene con frasi vocali sarcastiche quando l'utente supera una soglia configurabile.
 
-Ispirato a [SlapMac](https://slapmac.com/) — formula: premise ridicola + demo virale + build weekend.
+- apertura sopra soglia → battuta vocale;
+- chiusura mentre si era sopra soglia → frase di sollievo;
+- eventi rapidi accorpati in una sola valutazione;
+- cooldown automatico di 60 secondi;
+- badge verde, arancione o rosso con il numero di tab;
+- popup con contatore, soglia, lingua, stile delle frasi e attivazione rapida;
+- interfaccia e frasi disponibili in italiano e inglese;
+- italiano automatico per browser italiani, inglese come fallback globale;
+- override manuale della lingua vocale dal popup;
+- selezione automatica della voce TTS compatibile con punteggio migliore.
 
----
+## Struttura
 
-## Struttura file
-
-```
-tabshame/
-├── manifest.json          # Manifest V3 — permissions: tabs, storage, scripting
-├── background.js          # Service worker — logica principale, frasi, speech injection
-├── content.js             # Placeholder (speech ora injettato direttamente)
-├── popup.html             # UI popup
-├── popup.js               # Logica popup
-├── popup.css              # Stile dark, accent rosso/arancione
-├── icons/
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── voices/
-    └── phrases.js         # Frasi IT+EN (non più usato — frasi ora in background.js)
-```
-
----
-
-## Come funziona (architettura)
-
-### Approccio speech — IMPORTANTE
-
-**Non** si usa un content script persistente (si congela dopo un po' — bug noto Chrome/Arc).  
-La voce viene iniettata **fresh ogni volta** via `chrome.scripting.executeScript` con una funzione inline. Questo evita il freeze e funziona anche su Arc Browser.
-
-```js
-// background.js — speakInTab()
-await chrome.scripting.executeScript({
-  target: { tabId },
-  func: (text, lang) => {
-    // speechSynthesis direttamente nel tab attivo
-    window.speechSynthesis.cancel();
-    // ... speak
-  },
-  args: [text, lang]
-});
+```text
+manifest.json       Metadati, permessi e service worker
+background.js       Stato, conteggio tab, badge, frasi e chrome.tts
+popup.html          Interfaccia del popup
+popup.css           Identità visiva TabYell
+popup.js            Stato e interazioni del popup
+_locales/           Cataloghi inglese e italiano
+icons/              Icone dell'estensione
+tests/              Validazione statica e test del service worker
+content.js          Placeholder non registrato nel manifest
+offscreen.js        Implementazione speechSynthesis legacy, non registrata
+voices/phrases.js   Raccolta frasi legacy, non caricata dal manifest
 ```
 
-### Flusso eventi
+## Architettura vocale
 
-```
-chrome.tabs.onCreated  → handleTabChange('up')   → shame se sopra soglia
-chrome.tabs.onRemoved  → handleTabChange('down')  → relief se eravamo sopra soglia
-chrome.tabs.onActivated → aggiorna solo badge (no voce)
-popup: SHAME_NOW       → handleTabChange('neutral', force=true)
+La voce viene riprodotta dal service worker tramite `chrome.tts`. Non sono richiesti accessi ai contenuti delle pagine e il manifest non richiede host permissions.
+
+```text
+chrome.tabs.onCreated/onRemoved
+        ↓
+debounce 350 ms e accorpamento eventi
+        ↓
+controllo soglia e cooldown
+        ↓
+selezione voce e chrome.tts.speak
 ```
 
-### Stato salvato in chrome.storage.local
+Il pulsante `YELL_NOW` bypassa il cooldown, annulla l'evento automatico pendente e riceve risposta immediata nel popup. Gli eventi automatici non possono accumulare un backlog: viene conservata al massimo una direzione pendente.
+
+## Stato persistito
 
 ```js
 {
-  threshold: 3,      // soglia tab (3 per test, alzare a 15 per produzione)
-  language: 'it',   // 'it' | 'en'
+  threshold: 15,
+  language: 'en',
+  languageMode: 'auto',
   enabled: true,
-  totalShames: 0,
-  cooldownUntil: 0,  // timestamp ms — cooldown 5s per test, alzare a 60s produzione
-  lastTabCount: 0
+  totalYells: 0,
+  cooldownUntil: 0,
+  lastTabCount: 0,
+  phraseMode: 'both'
 }
 ```
 
----
+Durante l'aggiornamento dalla versione precedente, `totalShames` viene migrato automaticamente in `totalYells`. Le installazioni legacy con il vecchio default italiano passano alla lingua del browser; una scelta inglese esplicita su browser italiano viene preservata.
 
-## Bug risolti (storia)
+## Lingua
 
-| Versione | Bug | Fix |
-|---|---|---|
-| v0.1 | Silenzioso su Arc | Arc non carica content script — workaround con executeScript |
-| v0.2 | Non scattava automaticamente | Fix injection dinamica Arc |
-| v0.3 | Badge mancante | Aggiunto setBadgeText/Color |
-| v0.5 | Voce si congela dopo un po' | Cambio architettura: speech inline ogni volta, non content script persistente |
-| v0.6 | Numeri hardcoded nelle frasi ("Quindici tab...") | Tutte le frasi ora usano `{count}` dinamico |
-| v0.7 | Voce doppia | Fix flag `spoken` nel fallback onvoiceschanged+setTimeout |
+- Chrome con UI italiana → interfaccia italiana e voce automatica italiana.
+- Qualsiasi altra UI → interfaccia inglese e voce automatica inglese.
+- L'override manuale cambia la voce, non la lingua dell'interfaccia.
 
----
+## Voci e privacy
 
-## Todo / Next steps
+La selezione segue una policy quality-first e consente le voci remote esposte da Chrome. TabYell non legge URL, titoli o contenuti delle pagine e non possiede un server. Se Chrome seleziona un motore remoto, la frase generata — eventualmente comprensiva del numero totale di tab — può essere elaborata in rete dal provider della voce.
 
-### 🔧 Tecnici
-- [ ] Alzare soglia da 3 a 15 per produzione (`DEFAULT_STATE.threshold`)
-- [ ] Alzare cooldown da 5s a 60s per produzione (`cooldownUntil: now + 60_000`)
-- [ ] Testare su Chrome puro (non solo Arc) — Arc ha comportamenti non standard
-- [ ] Fix popup: aggiornamento live del counter (ora richiede apertura popup)
-- [ ] voices/phrases.js non è più usato — o rimuovere o re-integrare come sorgente unica di frasi
+Il service worker registra nome, lingua e natura locale/remota della voce scelta.
 
-### 🎨 UI/UX
-- [ ] Animazione sul badge quando scatta la vergogna
-- [ ] Suono di notifica opzionale oltre alla voce
-- [ ] Statistiche più ricche nel popup (tab record, sessione corrente)
+## Controlli prima di una release
 
-### 🚀 Produzione
-- [ ] Aggiungere icone vere (ora sono placeholder colorati)
-- [ ] Privacy policy (richiesta da Chrome Web Store)
-- [ ] Screenshot per lo store
-- [ ] Scegliere prezzo (suggerito: $4.99 one-shot)
-- [ ] Registrarsi su Chrome Web Store ($5 una tantum)
+1. Eseguire `node tests/validate-extension.mjs`.
+2. Verificare che GitHub Actions completi il workflow **Validate extension**.
+3. Caricare la cartella da `chrome://extensions` in modalità sviluppatore.
+4. Verificare l'upgrade sopra una versione già installata e la migrazione del contatore.
+5. Aprire rapidamente molte tab e confermare che parta una sola frase.
+6. Confermare che durante il cooldown non partano nuove frasi automatiche.
+7. Provare un browser italiano e uno non italiano, la modalità automatica e gli override manuali.
+8. Premere **Sgridami adesso** e verificare feedback immediato e priorità sulla voce automatica.
+9. Controllare nel log del service worker quale voce TTS è stata scelta.
+10. Provare tutte le modalità delle frasi e verificare badge, soglia e toggle.
+11. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
+12. Pubblicare la versione 1.2.0 mantenendo lo stesso extension ID.
 
----
+## Identità
 
-## Come fare il reload automatico dell'estensione su Mac
-
-OpenClaw locale può automatizzare il reload così da non dover fare il giro manuale ogni volta.
-
-### Metodo 1 — osascript (AppleScript)
-```bash
-osascript -e 'tell application "Google Chrome" to reload extension "ID_ESTENSIONE"'
-```
-L'ID lo trovi in `chrome://extensions` sotto il nome dell'estensione.
-
-### Metodo 2 — Script shell completo
-```bash
-#!/bin/bash
-# reload-tabshame.sh
-EXTENSION_ID="qui_metti_l_id"
-DEST_DIR="$HOME/tabshame"  # cartella dove tieni l'estensione unpacked
-
-# Copia i file aggiornati
-rsync -a /path/to/tabshame/ "$DEST_DIR/"
-
-# Reload in Chrome via AppleScript
-osascript -e "tell application \"Google Chrome\" to reload extension \"$EXTENSION_ID\""
-
-echo "TabShame reloaded ✅"
-```
-
-### Flusso ideale con OpenClaw locale
-1. OpenClaw riceve file aggiornati (zip o cartella)
-2. Estrae in `~/tabshame/`
-3. Esegue reload via osascript
-4. Conferma a Michele via Telegram
-
----
-
-## Stato attuale al momento dell'handover
-
-- **Soglia:** 3 tab (test) — alzare a 15
-- **Cooldown:** 5 secondi (test) — alzare a 60s
-- **Frasi:** 7 per tier × 4 tier + 4 milestone + 10 relief, in IT e EN
-- **Badge:** ✅ funzionante
-- **Voce automatica:** ✅ funzionante su Arc
-- **Voce al chiuder tab:** ✅ funzionante
-- **Popup:** ✅ funzionante (toggle, slider, lingua, vergognami adesso)
-
----
-
-## File da ricevere da Michele
-
-Michele ti passa lo zip `tabshame.zip` con la versione v0.7 già funzionante.  
-Estrai, carica in Chrome in modalità sviluppatore, e sei pronto.
-
-Per caricare: `chrome://extensions` → Modalità sviluppatore ON → "Carica estensione non compressa" → seleziona cartella `tabshame/`
+- Nome visualizzato: **TabYell**
+- Frase principale: **Open too many tabs. Your browser yells at you.**
+- Colore principale: `#ffd23f`
+- Accento: `#ff9f1c`
+- Icona: volto arrabbiato, riutilizzabile come personaggio di TabYell

@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
-  "name": "TabShame",
-  "description": "Counts your open tabs and playfully shames you with voice when things get out of hand.",
-  "version": "1.1.0",
-  "permissions": ["tabs", "storage", "scripting", "alarms", "tts"],
-  "host_permissions": ["<all_urls>"],
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
+  "version": "1.2.0",
+  "permissions": [
+    "tabs",
+    "storage",
+    "tts"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TabShame",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "popup.html"
   },
   "icons": {

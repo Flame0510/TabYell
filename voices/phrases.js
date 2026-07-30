@@ -98,5 +98,5 @@
     }
   };
 
-  globalThis.TABSHAME_PHRASES = phrases;
+  globalThis.TABYELL_PHRASES = phrases;
 })();
