@@ -160,7 +160,10 @@ el.settingsToggle.addEventListener('click', () => {
 
 el.yellNow.addEventListener('click', async () => {
   const response = await send({ type: 'YELL_NOW' });
-  if (response?.ok) render(response.state, true);
+  if (response?.ok) {
+    render(response.state);
+    if (response.queued) triggerYellPulse();
+  }
 });
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -169,7 +172,8 @@ chrome.runtime.onMessage.addListener((message) => {
   }
   if (message?.type === 'STATE_UPDATED' && message.state) {
     const wasYelled = message.state.totalYells > (currentState.totalYells || 0);
-    render(message.state, wasYelled);
+    const shouldPulse = wasYelled && message.source !== 'manual';
+    render(message.state, shouldPulse);
   }
 });
 
