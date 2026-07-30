@@ -12,7 +12,7 @@ TabYell è un'estensione Chrome Manifest V3 che conta le tab aperte e interviene
 - chiusura mentre si era sopra soglia → frase di sollievo;
 - badge verde, arancione o rosso con il numero di tab;
 - popup con contatore, soglia, lingua, stile delle frasi e attivazione rapida;
-- frasi disponibili in italiano e inglese.
+- frasi e interfaccia disponibili in italiano e inglese;\n- italiano automatico per browser italiani, inglese come fallback globale;\n- override manuale della lingua dal popup;\n- selezione automatica della migliore voce TTS installata per la lingua scelta.
 
 ## Struttura
 
@@ -53,14 +53,14 @@ popup: YELL_NOW        → handleYell(..., true)
 }
 ```
 
-Durante l'aggiornamento dalla versione precedente, `totalShames` viene migrato automaticamente in `totalYells`, così le statistiche dell'utente non vengono perse.
+Durante l'aggiornamento dalla versione precedente, `totalShames` viene migrato automaticamente in `totalYells`, così le statistiche dell'utente non vengono perse. Le installazioni legacy che avevano il vecchio default italiano passano alla lingua del browser; una scelta inglese esplicita su browser italiano viene preservata.
 
 ## Controlli prima di una release
 
 1. Caricare la cartella da `chrome://extensions` in modalità sviluppatore.
 2. Verificare l'upgrade sopra una versione già installata e la migrazione del contatore.
 3. Testare apertura e chiusura rapida di più tab su Chrome e Arc.
-4. Provare entrambe le lingue e tutte le modalità delle frasi.
+4. Provare un browser italiano e uno non italiano, la modalità automatica e gli override manuali.\n5. Controllare nei log del service worker quale voce TTS è stata scelta e ascoltare l'inglese.\n6. Provare tutte le modalità delle frasi.
 5. Controllare badge, soglia, toggle e pulsante “Sgridami adesso”.
 6. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
 7. Pubblicare la versione 1.2.0 mantenendo lo stesso extension ID.
