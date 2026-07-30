@@ -26,7 +26,7 @@ function localizePopup() {
 
   const autoOption = document.getElementById('languageAuto');
   const detectedLanguage = browserLanguage === 'it' ? 'Italiano' : 'English';
-  autoOption.textContent = `🌐 ${t('languageAuto')} (${detectedLanguage})`;
+  autoOption.textContent = `${t('languageAuto')} (${detectedLanguage})`;
 }
 
 localizePopup();
