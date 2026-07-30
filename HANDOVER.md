@@ -24,7 +24,7 @@ popup.css           Identità visiva TabYell
 popup.js            Stato e interazioni del popup
 icons/              Icone dell'estensione
 content.js          Placeholder per future reazioni visive
- offscreen.js        Implementazione speechSynthesis legacy, non registrata
+offscreen.js        Implementazione speechSynthesis legacy, non registrata
 voices/phrases.js   Raccolta frasi legacy, non caricata dal manifest
 ```
 
