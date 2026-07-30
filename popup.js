@@ -1,3 +1,36 @@
+function t(key) {
+  return chrome.i18n.getMessage(key) || key;
+}
+
+function getBrowserVoiceLanguage() {
+  const locale = chrome.i18n.getUILanguage?.() || chrome.i18n.getMessage('@@ui_locale') || 'en';
+  return locale.toLowerCase().replace('_', '-').startsWith('it') ? 'it' : 'en';
+}
+
+function localizePopup() {
+  const browserLanguage = getBrowserVoiceLanguage();
+  document.documentElement.lang = browserLanguage;
+  document.title = t('extensionName');
+
+  document.querySelectorAll('[data-i18n]').forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
+  });
+
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((node) => {
+    node.setAttribute('aria-label', t(node.dataset.i18nAriaLabel));
+  });
+
+  const autoOption = document.getElementById('languageAuto');
+  const detectedLanguage = browserLanguage === 'it' ? 'Italiano' : 'English';
+  autoOption.textContent = `🌐 ${t('languageAuto')} (${detectedLanguage})`;
+}
+
+localizePopup();
+
 const el = {
   tabCount: document.getElementById('tabCount'),
   meterFill: document.getElementById('meterFill'),
@@ -15,7 +48,8 @@ const el = {
 
 let currentState = {
   threshold: 15,
-  language: 'it',
+  language: getBrowserVoiceLanguage(),
+  languageMode: 'auto',
   phraseMode: 'both',
   enabled: true,
   totalYells: 0,
@@ -36,19 +70,18 @@ function updateMeter(tabCount, threshold) {
 
   if (over) {
     el.meterFill.style.background = 'var(--bad)';
-    el.meterHint.textContent = 'Soglia superata: TabYell è sveglio';
+    el.meterHint.textContent = t('meterOver');
   } else if (near) {
     el.meterFill.style.background = 'var(--warn)';
-    el.meterHint.textContent = 'Attento: sta per partire';
+    el.meterHint.textContent = t('meterNear');
   } else {
     el.meterFill.style.background = 'var(--good)';
-    el.meterHint.textContent = 'Tutto tranquillo';
+    el.meterHint.textContent = t('meterFine');
   }
 }
 
 function triggerYellPulse() {
   el.tabCount.classList.remove('yelled');
-  // Force reflow so the animation restarts even if already yelled
   void el.tabCount.offsetWidth;
   el.tabCount.classList.add('yelled');
   el.tabCount.addEventListener('animationend', () => {
@@ -65,23 +98,22 @@ function render(state, flash = false) {
   el.enabled.checked = !!currentState.enabled;
   el.threshold.value = String(currentState.threshold);
   el.thresholdValue.textContent = String(currentState.threshold);
-  el.language.value = currentState.language;
+  el.language.value = currentState.languageMode === 'auto' ? 'auto' : currentState.language;
   el.phraseMode.value = currentState.phraseMode || 'both';
   el.totalYells.textContent = String(currentState.totalYells || 0);
   updateMeter(tabCount, currentState.threshold);
 
-  // Dynamic subtitle based on state
-  const t = currentState.threshold;
+  const threshold = currentState.threshold;
   if (!currentState.enabled) {
-    el.subtitle.textContent = 'TabYell dorme. Per ora.';
-  } else if (tabCount >= t + 25) {
-    el.subtitle.textContent = 'TabYell sta per perdere la voce.';
-  } else if (tabCount >= t) {
-    el.subtitle.textContent = 'Hai superato la soglia. Preparati.';
-  } else if (tabCount >= t - 2) {
-    el.subtitle.textContent = 'Ancora una tab e TabYell parte.';
+    el.subtitle.textContent = t('subtitleDisabled');
+  } else if (tabCount >= threshold + 25) {
+    el.subtitle.textContent = t('subtitleCritical');
+  } else if (tabCount >= threshold) {
+    el.subtitle.textContent = t('subtitleOver');
+  } else if (tabCount >= threshold - 2) {
+    el.subtitle.textContent = t('subtitleNear');
   } else {
-    el.subtitle.textContent = 'Silenzio sospetto. Per ora.';
+    el.subtitle.textContent = t('subtitleFine');
   }
 }
 
@@ -109,7 +141,11 @@ el.threshold.addEventListener('change', async () => {
 });
 
 el.language.addEventListener('change', async () => {
-  const response = await send({ type: 'UPDATE_SETTINGS', language: el.language.value });
+  const selectedLanguage = el.language.value;
+  const message = selectedLanguage === 'auto'
+    ? { type: 'UPDATE_SETTINGS', languageMode: 'auto' }
+    : { type: 'UPDATE_SETTINGS', language: selectedLanguage, languageMode: 'manual' };
+  const response = await send(message);
   if (response?.ok) render(response.state);
 });
 
@@ -118,7 +154,6 @@ el.phraseMode.addEventListener('change', async () => {
   if (response?.ok) render(response.state);
 });
 
-// Opens the extension management page using the current extension's own ID
 el.settingsToggle.addEventListener('click', () => {
   chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
 });
