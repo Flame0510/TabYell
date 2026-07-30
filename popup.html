@@ -3,20 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TabShame</title>
+    <title>TabYell</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <main class="card">
       <header>
         <div class="header-left">
-          <h1>TabShame 😤</h1>
-          <p class="subtitle">Dignità del browser: in osservazione</p>
+          <h1><span>Tab</span><span class="brand-yell">Yell</span><span class="sound-mark" aria-hidden="true">🔊</span></h1>
+          <p class="subtitle">Silenzio sospetto. Per ora.</p>
         </div>
-        <button id="settingsToggle" class="settings-btn" title="Gestione estensione">⚙️</button>
+        <button id="settingsToggle" class="settings-btn" title="Impostazioni TabYell" aria-label="Apri le impostazioni di TabYell">⚙️</button>
       </header>
 
-      <section class="count-wrap">
+      <section class="count-wrap" aria-label="Numero di tab aperte">
         <div id="tabCount" class="count">0</div>
         <div class="count-label">tab aperte</div>
       </section>
@@ -25,12 +25,12 @@
         <div class="meter-track">
           <div id="meterFill" class="meter-fill"></div>
         </div>
-        <div id="meterHint" class="meter-hint">Sotto controllo</div>
+        <div id="meterHint" class="meter-hint">Tutto tranquillo</div>
       </section>
 
       <section class="controls">
         <label class="row toggle-row">
-          <span>Estensione attiva</span>
+          <span>TabYell attivo</span>
           <input id="enabled" type="checkbox" />
         </label>
 
@@ -40,7 +40,7 @@
         <input id="threshold" type="range" min="1" max="50" step="1" value="15" />
 
         <label class="row" for="language">
-          <span>Lingua voce</span>
+          <span>Lingua della voce</span>
         </label>
         <select id="language">
           <option value="it">🇮🇹 Italiano</option>
@@ -48,7 +48,7 @@
         </select>
 
         <label class="row" for="phraseMode">
-          <span>Stile frasi</span>
+          <span>Stile delle frasi</span>
         </label>
         <select id="phraseMode">
           <option value="both">🎲 Misto</option>
@@ -58,11 +58,11 @@
       </section>
 
       <section class="stats">
-        <span>Vergogne subite:</span>
-        <strong id="totalShames">0</strong>
+        <span>Sgridate ricevute:</span>
+        <strong id="totalYells">0</strong>
       </section>
 
-      <button id="shameNow" class="shame-btn">😤 Fammi vergognare adesso</button>
+      <button id="yellNow" class="yell-btn">🔊 Sgridami adesso</button>
     </main>
 
     <script src="popup.js"></script>
