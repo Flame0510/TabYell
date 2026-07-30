@@ -402,8 +402,8 @@ chrome.runtime.onInstalled.addListener(async () => {
   await chrome.storage.local.set({ ...DEFAULT_STATE, ...current, totalYells });
   if ('totalShames' in current) await chrome.storage.local.remove('totalShames');
 
-  const count = await getTabCount();
-  await updateBadge(count, DEFAULT_STATE.threshold);
+  const [nextState, count] = await Promise.all([getState(), getTabCount()]);
+  await updateBadge(count, nextState.threshold);
   chrome.alarms.create('keepalive', { periodInMinutes: 0.4 });
 });
 
