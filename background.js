@@ -9,6 +9,9 @@ const DEFAULT_STATE = {
   phraseMode: 'both'
 };
 
+const AUTOMATIC_YELL_SETTLE_MS = 350;
+const YELL_COOLDOWN_MS = 60_000;
+
 function detectBrowserLanguage() {
   const locale = chrome.i18n.getUILanguage?.()
     || chrome.i18n.getMessage('@@ui_locale')
@@ -148,6 +151,8 @@ function scoreVoice(voice, language) {
   if (preferredIndex >= 0) score += 250 - preferredIndex * 12;
 
   if (/(enhanced|premium|natural|neural|online)/.test(voiceName)) score += 70;
+  // Quality-first policy: remote voices are allowed and explicitly disclosed.
+  if (voice.remote) score += 10;
   if (LOW_QUALITY_VOICE_HINTS.some((hint) => voiceName.includes(hint))) score -= 200;
   if (voice.eventTypes?.includes('end')) score += 15;
   if (voice.eventTypes?.includes('start')) score += 5;
@@ -188,7 +193,8 @@ async function speak(text, language) {
   console.log(
     '[TabYell tts] voice:',
     voice?.voiceName || 'Chrome default',
-    languageTag
+    languageTag,
+    voice ? (voice.remote ? '(remote)' : '(local)') : ''
   );
 
   return new Promise((resolve) => {
@@ -497,22 +503,57 @@ function buildPhrase(tabCount, lang, threshold, type, phraseMode) {
 
 // ── Core yell logic ─────────────────────────────────────────────────────────
 
-// Yell queue — one at a time, no overlapping yell events
+// Rapid automatic events are coalesced; at most one automatic yell stays pending.
 let _yellHandling = false;
-const _yellQueue = [];
+let _pendingAutomaticDirection = null;
+let _manualYellPending = false;
+let _automaticYellTimer = null;
 
-function enqueueYell(direction, force = false) {
-  _yellQueue.push({ direction, force });
-  if (!_yellHandling) drainYellQueue();
+function scheduleAutomaticYell(direction) {
+  _pendingAutomaticDirection = direction;
+  if (_automaticYellTimer) clearTimeout(_automaticYellTimer);
+  _automaticYellTimer = setTimeout(() => {
+    _automaticYellTimer = null;
+    drainYellQueue();
+  }, AUTOMATIC_YELL_SETTLE_MS);
+}
+
+function scheduleManualYell() {
+  _manualYellPending = true;
+  _pendingAutomaticDirection = null;
+  if (_automaticYellTimer) {
+    clearTimeout(_automaticYellTimer);
+    _automaticYellTimer = null;
+  }
+
+  // A manual request takes priority over an automatic utterance already playing.
+  chrome.tts.stop();
+  drainYellQueue();
 }
 
 async function drainYellQueue() {
-  if (_yellHandling || _yellQueue.length === 0) return;
+  if (_yellHandling) return;
+
+  let task = null;
+  if (_manualYellPending) {
+    _manualYellPending = false;
+    task = { direction: 'neutral', force: true };
+  } else if (!_automaticYellTimer && _pendingAutomaticDirection) {
+    task = { direction: _pendingAutomaticDirection, force: false };
+    _pendingAutomaticDirection = null;
+  }
+
+  if (!task) return;
+
   _yellHandling = true;
-  const { direction, force } = _yellQueue.shift();
-  try { await handleYell(direction, force); } catch(e) { console.warn('[TabYell] yell error', e); }
-  _yellHandling = false;
-  drainYellQueue();
+  try {
+    await handleYell(task.direction, task.force);
+  } catch (error) {
+    console.warn('[TabYell] yell error', error);
+  } finally {
+    _yellHandling = false;
+    drainYellQueue();
+  }
 }
 
 async function handleYell(direction, force = false) {
@@ -520,7 +561,8 @@ async function handleYell(direction, force = false) {
 
   await setState({ lastTabCount: tabCount });
 
-  if (!state.enabled) return;
+  if (!state.enabled) return false;
+  if (!force && Date.now() < state.cooldownUntil) return false;
 
   let type = null;
   if (force) {
@@ -531,21 +573,32 @@ async function handleYell(direction, force = false) {
     type = 'relief';
   }
 
-  if (!type) return;
+  if (!type) return false;
 
   const text = buildPhrase(tabCount, state.language, state.threshold, type, state.phraseMode || 'both');
   console.log('[TabYell] speaking:', text);
   const spoke = await speak(text, state.language);
 
-  if (spoke && type === 'yell') {
-    await setState({ totalYells: (state.totalYells || 0) + 1 });
-    broadcast({ type: 'STATE_UPDATED', state: await getState() });
+  if (!spoke) return false;
+
+  const patch = { cooldownUntil: Date.now() + YELL_COOLDOWN_MS };
+  if (type === 'yell') patch.totalYells = (state.totalYells || 0) + 1;
+  await setState(patch);
+
+  if (type === 'yell') {
+    broadcast({
+      type: 'STATE_UPDATED',
+      source: force ? 'manual' : 'automatic',
+      state: await getState()
+    });
     chrome.action.setBadgeBackgroundColor({ color: '#ff0000' });
     setTimeout(async () => {
       const [s, c] = await Promise.all([getState(), getTabCount()]);
       updateBadge(c, s.threshold);
     }, 2000);
   }
+
+  return true;
 }
 
 // ── Listeners ────────────────────────────────────────────────────────────────
@@ -568,32 +621,25 @@ chrome.runtime.onInstalled.addListener(async () => {
   if ('totalShames' in current) await chrome.storage.local.remove('totalShames');
 
   const [nextState, count] = await Promise.all([getState(), getTabCount()]);
+  await setState({ lastTabCount: count });
   await updateBadge(count, nextState.threshold);
-  chrome.alarms.create('keepalive', { periodInMinutes: 0.4 });
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   const [state, count] = await Promise.all([getState(), getTabCount()]);
+  await setState({ lastTabCount: count });
   await updateBadge(count, state.threshold);
-  chrome.alarms.create('keepalive', { periodInMinutes: 0.4 });
-});
-
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === 'keepalive') {
-    const [state, count] = await Promise.all([getState(), getTabCount()]);
-    await updateBadge(count, state.threshold);
-  }
 });
 
 // Badge update is debounced — fires once after rapid burst settles
 chrome.tabs.onCreated.addListener(() => {
   scheduleBadgeUpdate();
-  enqueueYell('up');
+  scheduleAutomaticYell('up');
 });
 
 chrome.tabs.onRemoved.addListener(() => {
   scheduleBadgeUpdate();
-  enqueueYell('down');
+  scheduleAutomaticYell('down');
 });
 
 chrome.tabs.onActivated.addListener(async () => {
@@ -627,9 +673,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       return;
     }
     if (message?.type === 'YELL_NOW') {
-      await handleYell('neutral', true);
       const [next, count] = await Promise.all([getState(), getTabCount()]);
-      sendResponse({ ok: true, state: { ...next, lastTabCount: count } });
+      if (next.enabled) scheduleManualYell();
+      sendResponse({
+        ok: true,
+        queued: next.enabled,
+        state: { ...next, lastTabCount: count }
+      });
       return;
     }
     sendResponse({ ok: false, error: 'Unknown message type' });
