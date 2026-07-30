@@ -44,6 +44,16 @@ assert.equal(manifest.default_locale, 'en');
 assert.deepEqual(manifest.permissions.sort(), ['storage', 'tabs', 'tts']);
 assert.equal(manifest.host_permissions, undefined);
 
+const emojiPattern = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+for (const [name, source] of [
+  ['popup.html', popupHtml],
+  ['popup.js', popupSource],
+  ['English locale', englishSource],
+  ['Italian locale', italianSource]
+]) {
+  assert.equal(emojiPattern.test(source), false, `${name} must not contain emoji`);
+}
+
 const englishKeys = Object.keys(english).sort();
 const italianKeys = Object.keys(italian).sort();
 assert.deepEqual(italianKeys, englishKeys, 'Locale catalogs must expose identical keys');
