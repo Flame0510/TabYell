@@ -2,7 +2,7 @@ const DEFAULT_STATE = {
   threshold: 15,
   language: 'it',
   enabled: true,
-  totalShames: 0,
+  totalYells: 0,
   cooldownUntil: 0,
   lastTabCount: 0,
   phraseMode: 'both'
@@ -11,8 +11,14 @@ const DEFAULT_STATE = {
 // ── Storage helpers ──────────────────────────────────────────────────────────
 
 async function getState() {
-  const state = await chrome.storage.local.get(DEFAULT_STATE);
-  return { ...DEFAULT_STATE, ...state };
+  const stored = await chrome.storage.local.get(null);
+  const totalYells = Number.isFinite(stored.totalYells)
+    ? stored.totalYells
+    : Number.isFinite(stored.totalShames)
+      ? stored.totalShames
+      : 0;
+
+  return { ...DEFAULT_STATE, ...stored, totalYells };
 }
 
 async function setState(patch) {
@@ -63,7 +69,7 @@ async function speak(text, lang) {
       rate: 1.0, pitch: 1.0, volume: 1.0,
       onEvent: (e) => {
         if (e.type === 'start') resolve(true);
-        if (e.type === 'error') { console.warn('[TabShame tts]', e); resolve(false); }
+        if (e.type === 'error') { console.warn('[TabYell tts]', e); resolve(false); }
       }
     });
   });
@@ -330,27 +336,27 @@ function buildPhrase(tabCount, lang, threshold, type, phraseMode) {
   return pickRandom(pool).replaceAll('{count}', String(tabCount));
 }
 
-// ── Core shame logic ─────────────────────────────────────────────────────────
+// ── Core yell logic ─────────────────────────────────────────────────────────
 
-// Shame queue — one at a time, no overlapping shame events
-let _shameHandling = false;
-const _shameQueue = [];
+// Yell queue — one at a time, no overlapping yell events
+let _yellHandling = false;
+const _yellQueue = [];
 
-function enqueueShame(direction, force = false) {
-  _shameQueue.push({ direction, force });
-  if (!_shameHandling) drainShameQueue();
+function enqueueYell(direction, force = false) {
+  _yellQueue.push({ direction, force });
+  if (!_yellHandling) drainYellQueue();
 }
 
-async function drainShameQueue() {
-  if (_shameHandling || _shameQueue.length === 0) return;
-  _shameHandling = true;
-  const { direction, force } = _shameQueue.shift();
-  try { await handleShame(direction, force); } catch(e) { console.warn('[TabShame] shame error', e); }
-  _shameHandling = false;
-  drainShameQueue();
+async function drainYellQueue() {
+  if (_yellHandling || _yellQueue.length === 0) return;
+  _yellHandling = true;
+  const { direction, force } = _yellQueue.shift();
+  try { await handleYell(direction, force); } catch(e) { console.warn('[TabYell] yell error', e); }
+  _yellHandling = false;
+  drainYellQueue();
 }
 
-async function handleShame(direction, force = false) {
+async function handleYell(direction, force = false) {
   const [state, tabCount] = await Promise.all([getState(), getTabCount()]);
 
   await setState({ lastTabCount: tabCount });
@@ -359,9 +365,9 @@ async function handleShame(direction, force = false) {
 
   let type = null;
   if (force) {
-    type = 'shame';
+    type = 'yell';
   } else if (direction === 'up' && tabCount >= state.threshold) {
-    type = 'shame';
+    type = 'yell';
   } else if (direction === 'down' && state.lastTabCount >= state.threshold) {
     type = 'relief';
   }
@@ -369,11 +375,11 @@ async function handleShame(direction, force = false) {
   if (!type) return;
 
   const text = buildPhrase(tabCount, state.language, state.threshold, type, state.phraseMode || 'both');
-  console.log('[TabShame] speaking:', text);
+  console.log('[TabYell] speaking:', text);
   const spoke = await speak(text, state.language);
 
-  if (spoke && type === 'shame') {
-    await setState({ totalShames: (state.totalShames || 0) + 1 });
+  if (spoke && type === 'yell') {
+    await setState({ totalYells: (state.totalYells || 0) + 1 });
     broadcast({ type: 'STATE_UPDATED', state: await getState() });
     chrome.action.setBadgeBackgroundColor({ color: '#ff0000' });
     setTimeout(async () => {
@@ -387,7 +393,15 @@ async function handleShame(direction, force = false) {
 
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get(null);
-  await chrome.storage.local.set({ ...DEFAULT_STATE, ...current });
+  const totalYells = Number.isFinite(current.totalYells)
+    ? current.totalYells
+    : Number.isFinite(current.totalShames)
+      ? current.totalShames
+      : 0;
+
+  await chrome.storage.local.set({ ...DEFAULT_STATE, ...current, totalYells });
+  if ('totalShames' in current) await chrome.storage.local.remove('totalShames');
+
   const count = await getTabCount();
   await updateBadge(count, DEFAULT_STATE.threshold);
   chrome.alarms.create('keepalive', { periodInMinutes: 0.4 });
@@ -409,12 +423,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 // Badge update is debounced — fires once after rapid burst settles
 chrome.tabs.onCreated.addListener(() => {
   scheduleBadgeUpdate();
-  enqueueShame('up');
+  enqueueYell('up');
 });
 
 chrome.tabs.onRemoved.addListener(() => {
   scheduleBadgeUpdate();
-  enqueueShame('down');
+  enqueueYell('down');
 });
 
 chrome.tabs.onActivated.addListener(async () => {
@@ -442,8 +456,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: true, state: { ...next, lastTabCount: count } });
       return;
     }
-    if (message?.type === 'SHAME_NOW') {
-      await handleShame('neutral', true);
+    if (message?.type === 'YELL_NOW') {
+      await handleYell('neutral', true);
       const [next, count] = await Promise.all([getState(), getTabCount()]);
       sendResponse({ ok: true, state: { ...next, lastTabCount: count } });
       return;
