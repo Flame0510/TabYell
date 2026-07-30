@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="it">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,58 +11,66 @@
       <header>
         <div class="header-left">
           <h1><span>Tab</span><span class="brand-yell">Yell</span><span class="sound-mark" aria-hidden="true">🔊</span></h1>
-          <p class="subtitle">Silenzio sospetto. Per ora.</p>
+          <p class="subtitle" data-i18n="initialSubtitle">Suspiciously quiet. For now.</p>
         </div>
-        <button id="settingsToggle" class="settings-btn" title="Impostazioni TabYell" aria-label="Apri le impostazioni di TabYell">⚙️</button>
+        <button
+          id="settingsToggle"
+          class="settings-btn"
+          data-i18n-title="settingsTitle"
+          data-i18n-aria-label="settingsAriaLabel"
+          title="TabYell settings"
+          aria-label="Open TabYell settings"
+        >⚙️</button>
       </header>
 
-      <section class="count-wrap" aria-label="Numero di tab aperte">
+      <section class="count-wrap" data-i18n-aria-label="openTabsAriaLabel" aria-label="Number of open tabs">
         <div id="tabCount" class="count">0</div>
-        <div class="count-label">tab aperte</div>
+        <div class="count-label" data-i18n="openTabsLabel">open tabs</div>
       </section>
 
       <section class="meter-wrap">
         <div class="meter-track">
           <div id="meterFill" class="meter-fill"></div>
         </div>
-        <div id="meterHint" class="meter-hint">Tutto tranquillo</div>
+        <div id="meterHint" class="meter-hint" data-i18n="meterFine">Everything is calm</div>
       </section>
 
       <section class="controls">
         <label class="row toggle-row">
-          <span>TabYell attivo</span>
+          <span data-i18n="extensionActive">TabYell enabled</span>
           <input id="enabled" type="checkbox" />
         </label>
 
         <label class="row" for="threshold">
-          <span>Soglia: <strong id="thresholdValue">15</strong> tab</span>
+          <span><span data-i18n="thresholdLabel">Threshold</span>: <strong id="thresholdValue">15</strong> <span data-i18n="tabsUnit">tabs</span></span>
         </label>
         <input id="threshold" type="range" min="1" max="50" step="1" value="15" />
 
         <label class="row" for="language">
-          <span>Lingua della voce</span>
+          <span data-i18n="voiceLanguage">Voice language</span>
         </label>
         <select id="language">
+          <option id="languageAuto" value="auto">🌐 Automatic</option>
           <option value="it">🇮🇹 Italiano</option>
           <option value="en">🇬🇧 English</option>
         </select>
 
         <label class="row" for="phraseMode">
-          <span>Stile delle frasi</span>
+          <span data-i18n="phraseStyle">Phrase style</span>
         </label>
         <select id="phraseMode">
-          <option value="both">🎲 Misto</option>
-          <option value="with-count">🔢 Con numero di tab</option>
-          <option value="without-count">💬 Senza numero</option>
+          <option value="both" data-i18n="phraseMixed">🎲 Mixed</option>
+          <option value="with-count" data-i18n="phraseWithCount">🔢 With tab count</option>
+          <option value="without-count" data-i18n="phraseWithoutCount">💬 Without tab count</option>
         </select>
       </section>
 
       <section class="stats">
-        <span>Sgridate ricevute:</span>
+        <span data-i18n="yellsReceived">Yells received:</span>
         <strong id="totalYells">0</strong>
       </section>
 
-      <button id="yellNow" class="yell-btn">🔊 Sgridami adesso</button>
+      <button id="yellNow" class="yell-btn" data-i18n="yellNow">🔊 Yell at me now</button>
     </main>
 
     <script src="popup.js"></script>
