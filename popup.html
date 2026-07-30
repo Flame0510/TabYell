@@ -10,7 +10,14 @@
     <main class="card">
       <header>
         <div class="header-left">
-          <h1><span>Tab</span><span class="brand-yell">Yell</span><span class="sound-mark" aria-hidden="true">🔊</span></h1>
+          <h1>
+            <span>Tab</span><span class="brand-yell">Yell</span>
+            <svg class="icon sound-mark" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M11 5 6.8 8.5H3.5v7h3.3L11 19V5Z" />
+              <path d="M15 8.5a5 5 0 0 1 0 7" />
+              <path d="M18 5.5a9 9 0 0 1 0 13" />
+            </svg>
+          </h1>
           <p class="subtitle" data-i18n="initialSubtitle">Suspiciously quiet. For now.</p>
         </div>
         <button
@@ -20,7 +27,13 @@
           data-i18n-aria-label="settingsAriaLabel"
           title="TabYell settings"
           aria-label="Open TabYell settings"
-        >⚙️</button>
+        >
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h10M18 7h2M4 17h2M10 17h10" />
+            <circle cx="16" cy="7" r="2" />
+            <circle cx="8" cy="17" r="2" />
+          </svg>
+        </button>
       </header>
 
       <section class="count-wrap" data-i18n-aria-label="openTabsAriaLabel" aria-label="Number of open tabs">
@@ -49,20 +62,32 @@
         <label class="row" for="language">
           <span data-i18n="voiceLanguage">Voice language</span>
         </label>
-        <select id="language">
-          <option id="languageAuto" value="auto">🌐 Automatic</option>
-          <option value="it">🇮🇹 Italiano</option>
-          <option value="en">🇬🇧 English</option>
-        </select>
+        <div class="select-wrap">
+          <svg class="icon field-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+          </svg>
+          <select id="language">
+            <option id="languageAuto" value="auto">Automatic</option>
+            <option value="it">Italiano</option>
+            <option value="en">English</option>
+          </select>
+        </div>
 
         <label class="row" for="phraseMode">
           <span data-i18n="phraseStyle">Phrase style</span>
         </label>
-        <select id="phraseMode">
-          <option value="both" data-i18n="phraseMixed">🎲 Mixed</option>
-          <option value="with-count" data-i18n="phraseWithCount">🔢 With tab count</option>
-          <option value="without-count" data-i18n="phraseWithoutCount">💬 Without tab count</option>
-        </select>
+        <div class="select-wrap">
+          <svg class="icon field-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 5h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H9l-5 4V7a2 2 0 0 1 1-2Z" />
+            <path d="M8 9h8M8 13h5" />
+          </svg>
+          <select id="phraseMode">
+            <option value="both" data-i18n="phraseMixed">Mixed</option>
+            <option value="with-count" data-i18n="phraseWithCount">With tab count</option>
+            <option value="without-count" data-i18n="phraseWithoutCount">Without tab count</option>
+          </select>
+        </div>
       </section>
 
       <section class="stats">
@@ -70,7 +95,14 @@
         <strong id="totalYells">0</strong>
       </section>
 
-      <button id="yellNow" class="yell-btn" data-i18n="yellNow">🔊 Yell at me now</button>
+      <button id="yellNow" class="yell-btn">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M11 5 6.8 8.5H3.5v7h3.3L11 19V5Z" />
+          <path d="M15 8.5a5 5 0 0 1 0 7" />
+          <path d="M18 5.5a9 9 0 0 1 0 13" />
+        </svg>
+        <span data-i18n="yellNow">Yell at me now</span>
+      </button>
     </main>
 
     <script src="popup.js"></script>
