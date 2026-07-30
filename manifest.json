@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "TabYell",
-  "description": "Open too many tabs and TabYell calls you out with sarcastic voice lines in English or Italian.",
+  "name": "__MSG_extensionName__",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
   "version": "1.2.0",
   "permissions": ["tabs", "storage", "alarms", "tts"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TabYell — your tabs have a voice",
+    "default_title": "__MSG_actionTitle__",
     "default_popup": "popup.html"
   },
   "icons": {
