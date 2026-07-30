@@ -1,12 +1,43 @@
 const DEFAULT_STATE = {
   threshold: 15,
-  language: 'it',
+  language: 'en',
+  languageMode: 'auto',
   enabled: true,
   totalYells: 0,
   cooldownUntil: 0,
   lastTabCount: 0,
   phraseMode: 'both'
 };
+
+function detectBrowserLanguage() {
+  const locale = chrome.i18n.getUILanguage?.()
+    || chrome.i18n.getMessage('@@ui_locale')
+    || 'en';
+  return locale.toLowerCase().replace('_', '-').startsWith('it') ? 'it' : 'en';
+}
+
+function resolveLanguageState(stored = {}) {
+  const detectedLanguage = detectBrowserLanguage();
+  const storedLanguage = stored.language === 'it' || stored.language === 'en'
+    ? stored.language
+    : null;
+
+  if (stored.languageMode === 'manual' && storedLanguage) {
+    return { language: storedLanguage, languageMode: 'manual' };
+  }
+
+  if (stored.languageMode === 'auto') {
+    return { language: detectedLanguage, languageMode: 'auto' };
+  }
+
+  // Legacy migration: English on an Italian browser was a deliberate choice.
+  // The old Italian default on every other browser becomes automatic English.
+  if (detectedLanguage === 'it' && storedLanguage === 'en') {
+    return { language: 'en', languageMode: 'manual' };
+  }
+
+  return { language: detectedLanguage, languageMode: 'auto' };
+}
 
 // ── Storage helpers ──────────────────────────────────────────────────────────
 
@@ -17,8 +48,9 @@ async function getState() {
     : Number.isFinite(stored.totalShames)
       ? stored.totalShames
       : 0;
+  const languageState = resolveLanguageState(stored);
 
-  return { ...DEFAULT_STATE, ...stored, totalYells };
+  return { ...DEFAULT_STATE, ...stored, totalYells, ...languageState };
 }
 
 async function setState(patch) {
@@ -61,17 +93,144 @@ function broadcast(message) {
 
 // ── TTS ──────────────────────────────────────────────────────────────────────
 
-async function speak(text, lang) {
+const VOICE_NAME_PRIORITY = {
+  en: [
+    'Samantha',
+    'Alex',
+    'Ava',
+    'Allison',
+    'Google US English',
+    'Microsoft Aria',
+    'Microsoft Jenny',
+    'Microsoft Guy',
+    'Daniel',
+    'Karen',
+    'Moira'
+  ],
+  it: [
+    'Alice',
+    'Federica',
+    'Luca',
+    'Paola',
+    'Google italiano',
+    'Microsoft Elsa',
+    'Microsoft Isabella'
+  ]
+};
+
+const LOW_QUALITY_VOICE_HINTS = [
+  'compact',
+  'espeak',
+  'novelty',
+  'whisper',
+  'organ',
+  'cellos',
+  'bells',
+  'boing',
+  'bad news',
+  'good news'
+];
+
+const _voiceCache = new Map();
+
+function scoreVoice(voice, language) {
+  const targetLanguage = language === 'it' ? 'it' : 'en';
+  const targetLocale = language === 'it' ? 'it-it' : 'en-us';
+  const voiceLocale = (voice.lang || '').toLowerCase().replace('_', '-');
+  const voiceName = (voice.voiceName || '').toLowerCase();
+
+  if (!voiceLocale.startsWith(targetLanguage)) return Number.NEGATIVE_INFINITY;
+
+  let score = voiceLocale === targetLocale ? 60 : 40;
+  const preferredIndex = VOICE_NAME_PRIORITY[language].findIndex((name) =>
+    voiceName.includes(name.toLowerCase())
+  );
+  if (preferredIndex >= 0) score += 250 - preferredIndex * 12;
+
+  if (/(enhanced|premium|natural|neural|online)/.test(voiceName)) score += 70;
+  if (LOW_QUALITY_VOICE_HINTS.some((hint) => voiceName.includes(hint))) score -= 200;
+  if (voice.eventTypes?.includes('end')) score += 15;
+  if (voice.eventTypes?.includes('start')) score += 5;
+
+  return score;
+}
+
+async function selectBestVoice(language) {
+  if (_voiceCache.has(language)) return _voiceCache.get(language);
+
+  try {
+    const voices = await chrome.tts.getVoices();
+    const selected = voices
+      .map((voice) => ({ voice, score: scoreVoice(voice, language) }))
+      .filter(({ score }) => Number.isFinite(score))
+      .sort((a, b) => b.score - a.score)[0]?.voice || null;
+
+    _voiceCache.set(language, selected);
+    return selected;
+  } catch (error) {
+    console.warn('[TabYell tts] Could not inspect installed voices', error);
+    return null;
+  }
+}
+
+if (chrome.tts.onVoicesChanged) {
+  chrome.tts.onVoicesChanged.addListener(() => _voiceCache.clear());
+}
+
+async function speak(text, language) {
+  const voice = await selectBestVoice(language);
+  const languageTag = voice?.lang || (language === 'it' ? 'it-IT' : 'en-US');
+  const fallbackDuration = Math.min(
+    12_000,
+    Math.max(4_500, text.length * (language === 'en' ? 85 : 80))
+  );
+
+  console.log(
+    '[TabYell tts] voice:',
+    voice?.voiceName || 'Chrome default',
+    languageTag
+  );
+
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(fallbackTimer);
+      resolve(result);
+    };
+    const fallbackTimer = setTimeout(() => finish(true), fallbackDuration);
+
     chrome.tts.stop();
-    chrome.tts.speak(text, {
-      lang: lang === 'it' ? 'it-IT' : 'en-US',
-      rate: 1.0, pitch: 1.0, volume: 1.0,
-      onEvent: (e) => {
-        if (e.type === 'start') resolve(true);
-        if (e.type === 'error') { console.warn('[TabYell tts]', e); resolve(false); }
+
+    const options = {
+      lang: languageTag,
+      rate: language === 'en' ? 0.94 : 1.0,
+      pitch: language === 'en' ? 0.96 : 1.0,
+      volume: 1.0,
+      desiredEventTypes: ['start', 'end', 'interrupted', 'cancelled', 'error'],
+      onEvent: (event) => {
+        if (event.type === 'end') finish(true);
+        if (event.type === 'interrupted' || event.type === 'cancelled') finish(false);
+        if (event.type === 'error') {
+          console.warn('[TabYell tts]', event.errorMessage || event);
+          finish(false);
+        }
       }
-    });
+    };
+    if (voice?.voiceName) options.voiceName = voice.voiceName;
+    if (voice?.extensionId) options.extensionId = voice.extensionId;
+
+    try {
+      const speaking = chrome.tts.speak(text, options);
+      speaking?.catch((error) => {
+        console.warn('[TabYell tts] speak failed', error);
+        finish(false);
+      });
+    } catch (error) {
+      console.warn('[TabYell tts] speak failed', error);
+      finish(false);
+    }
   });
 }
 
@@ -399,7 +558,13 @@ chrome.runtime.onInstalled.addListener(async () => {
       ? current.totalShames
       : 0;
 
-  await chrome.storage.local.set({ ...DEFAULT_STATE, ...current, totalYells });
+  const languageState = resolveLanguageState(current);
+  await chrome.storage.local.set({
+    ...DEFAULT_STATE,
+    ...current,
+    totalYells,
+    ...languageState
+  });
   if ('totalShames' in current) await chrome.storage.local.remove('totalShames');
 
   const [nextState, count] = await Promise.all([getState(), getTabCount()]);
@@ -448,7 +613,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const patch = {};
       if (typeof message.enabled === 'boolean') patch.enabled = message.enabled;
       if (typeof message.threshold === 'number') patch.threshold = message.threshold;
-      if (message.language === 'it' || message.language === 'en') patch.language = message.language;
+      if (message.languageMode === 'auto') {
+        Object.assign(patch, resolveLanguageState({ languageMode: 'auto' }));
+      } else if (message.language === 'it' || message.language === 'en') {
+        patch.language = message.language;
+        patch.languageMode = 'manual';
+      }
       if (['with-count', 'without-count', 'both'].includes(message.phraseMode)) patch.phraseMode = message.phraseMode;
       await setState(patch);
       const [next, count] = await Promise.all([getState(), getTabCount()]);
