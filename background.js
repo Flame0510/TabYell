@@ -10,7 +10,6 @@ const DEFAULT_STATE = {
 };
 
 const AUTOMATIC_YELL_SETTLE_MS = 350;
-const YELL_COOLDOWN_MS = 60_000;
 
 function detectBrowserLanguage() {
   const locale = chrome.i18n.getUILanguage?.()
@@ -562,14 +561,13 @@ async function handleYell(direction, force = false) {
   await setState({ lastTabCount: tabCount });
 
   if (!state.enabled) return false;
-  if (!force && Date.now() < state.cooldownUntil) return false;
 
   let type = null;
   if (force) {
     type = 'yell';
-  } else if (direction === 'up' && tabCount >= state.threshold) {
+  } else if (direction === 'up' && tabCount > state.threshold) {
     type = 'yell';
-  } else if (direction === 'down' && state.lastTabCount >= state.threshold) {
+  } else if (direction === 'down' && state.lastTabCount > state.threshold) {
     type = 'relief';
   }
 
@@ -581,7 +579,7 @@ async function handleYell(direction, force = false) {
 
   if (!spoke) return false;
 
-  const patch = { cooldownUntil: Date.now() + YELL_COOLDOWN_MS };
+  const patch = { cooldownUntil: 0 };
   if (type === 'yell') patch.totalYells = (state.totalYells || 0) + 1;
   await setState(patch);
 

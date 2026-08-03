@@ -89,8 +89,16 @@ assert.ok(!readme.includes('\\n'), 'README contains a literal \\n sequence');
 assert.ok(!handover.includes('\\n'), 'HANDOVER contains a literal \\n sequence');
 assert.ok(!backgroundSource.includes('chrome.alarms'), 'Background still uses alarms');
 assert.ok(
-  backgroundSource.includes('Date.now() < state.cooldownUntil'),
-  'Automatic speech must enforce cooldownUntil'
+  !backgroundSource.includes('Date.now() < state.cooldownUntil'),
+  'Automatic speech must not be blocked by a persistent cooldown'
+);
+assert.ok(
+  backgroundSource.includes("direction === 'up' && tabCount > state.threshold"),
+  'Automatic yell must start only after the configured limit is exceeded'
+);
+assert.ok(
+  backgroundSource.includes("direction === 'down' && state.lastTabCount > state.threshold"),
+  'Relief speech must continue until the count returns to the configured limit'
 );
 
 for (const [filename, source] of [
@@ -240,15 +248,18 @@ function createBackgroundHarness({
 
   assert.equal(harness.spoken.length, 1, 'Rapid tab events must be coalesced');
   assert.equal(harness.state.totalYells, 1);
-  assert.ok(harness.state.cooldownUntil > Date.now());
+  assert.equal(harness.state.cooldownUntil, 0);
 
   harness.setTabCount(18);
   harness.listeners.created();
-  await wait(80);
+  await waitFor(
+    () => harness.state.totalYells === 2,
+    'A later automatic yell was incorrectly suppressed'
+  );
   assert.equal(
     harness.spoken.length,
-    1,
-    'Automatic speech must be suppressed during cooldown'
+    2,
+    'Separate tab openings above the limit must each trigger speech'
   );
 
   const startedAt = Date.now();
@@ -257,10 +268,70 @@ function createBackgroundHarness({
   assert.equal(response.queued, true);
   assert.ok(Date.now() - startedAt < 100, 'Manual response should be immediate');
   await waitFor(
-    () => harness.state.totalYells === 2,
+    () => harness.state.totalYells === 3,
     'Manual yell did not complete'
   );
-  assert.equal(harness.spoken.length, 2, 'Manual speech must bypass cooldown');
+  assert.equal(harness.spoken.length, 3, 'Manual speech must remain available');
+}
+
+{
+  const harness = createBackgroundHarness({
+    tabCount: 15,
+    storedState: { lastTabCount: 14 }
+  });
+
+  harness.listeners.created();
+  await wait(80);
+  assert.equal(
+    harness.spoken.length,
+    0,
+    'Reaching the configured limit must remain silent'
+  );
+
+  harness.setTabCount(16);
+  harness.listeners.created();
+  await waitFor(
+    () => harness.state.totalYells === 1,
+    'Exceeding the configured limit did not trigger speech'
+  );
+  assert.equal(harness.spoken.length, 1);
+}
+
+{
+  const harness = createBackgroundHarness({
+    tabCount: 17,
+    storedState: { lastTabCount: 18 }
+  });
+
+  harness.listeners.removed();
+  await waitFor(
+    () => harness.spoken.length === 1,
+    'First relief phrase did not play'
+  );
+
+  harness.setTabCount(16);
+  harness.listeners.removed();
+  await waitFor(
+    () => harness.spoken.length === 2,
+    'Second relief phrase was incorrectly suppressed'
+  );
+
+  harness.setTabCount(15);
+  harness.listeners.removed();
+  await waitFor(
+    () => harness.spoken.length === 3,
+    'Returning to the configured limit should still trigger relief'
+  );
+
+  harness.setTabCount(14);
+  harness.listeners.removed();
+  await wait(80);
+  assert.equal(
+    harness.spoken.length,
+    3,
+    'Closing tabs below the configured limit must remain silent'
+  );
+  assert.equal(harness.state.totalYells, 0, 'Relief phrases must not increment yell stats');
 }
 
 {
