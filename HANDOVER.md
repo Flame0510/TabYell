@@ -1,6 +1,6 @@
 # TabYell — Handover
 
-**Versione:** 1.2.2  
+**Versione:** 1.2.3  
 **Brand:** TabYell  
 **Tagline:** Open too many tabs. Your browser yells at you.
 
@@ -97,7 +97,7 @@ Il service worker registra nome, lingua e natura locale/remota della voce scelta
 11. Provare tutte le modalità delle frasi e verificare badge, soglia e toggle.
 12. Aprire/chiudere tab in sequenza sopra soglia e confermare che la stessa frase non si ripeta due volte di fila.
 13. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
-14. Pubblicare la versione 1.2.2 mantenendo lo stesso extension ID.
+14. Pubblicare la versione 1.2.3 mantenendo lo stesso extension ID.
 
 ## Identità
 
