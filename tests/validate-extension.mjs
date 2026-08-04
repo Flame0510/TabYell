@@ -121,8 +121,8 @@ function createBackgroundHarness({
     languageMode: 'auto',
     enabled: true,
     totalYells: 0,
-    cooldownUntil: 0,
     lastTabCount: 14,
+    lastPhrase: '',
     phraseMode: 'without-count',
     ...storedState
   };
@@ -225,6 +225,7 @@ function createBackgroundHarness({
     listeners,
     state,
     spoken,
+    pickRandomExcluding: context.pickRandomExcluding,
     setTabCount(value) {
       currentTabCount = value;
     },
@@ -248,7 +249,6 @@ function createBackgroundHarness({
 
   assert.equal(harness.spoken.length, 1, 'Rapid tab events must be coalesced');
   assert.equal(harness.state.totalYells, 1);
-  assert.equal(harness.state.cooldownUntil, 0);
 
   harness.setTabCount(18);
   harness.listeners.created();
@@ -384,6 +384,35 @@ function createBackgroundHarness({
   const response = await harness.sendMessage({ type: 'GET_STATUS' });
   assert.equal(response.state.language, 'it');
   assert.equal(response.state.languageMode, 'auto');
+}
+
+{
+  // Anti-repeat (deterministic unit test): pickRandomExcluding must never
+  // return the excluded template when the pool has at least two options.
+  const harness = createBackgroundHarness({
+    locale: 'en-US',
+    tabCount: 15,
+    storedState: { lastTabCount: 15 },
+    voices: []
+  });
+  const pick = harness.pickRandomExcluding;
+
+  const pool = ['A', 'B', 'C'];
+  // Force Math.random to always land on the excluded item index (0).
+  const realRandom = Math.random;
+  Math.random = () => 0;
+  try {
+    for (let i = 0; i < 20; i++) {
+      const picked = pick(pool, 'A');
+      assert.notEqual(picked, 'A', 'Excluded template must not be picked');
+      assert.ok(pool.includes(picked), 'Picked item must come from the pool');
+    }
+  } finally {
+    Math.random = realRandom;
+  }
+
+  // Single-item pool: must return the only item even if it is the excluded one.
+  assert.equal(pick(['A'], 'A'), 'A', 'Single-item pool must still return the item');
 }
 
 console.log('TabYell validation passed');

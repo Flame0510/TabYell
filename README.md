@@ -7,11 +7,13 @@ TabYell is a deliberately dramatic Chrome extension that counts your open tabs a
 ## What it does
 
 - speaks when newly opened tabs cross the chosen threshold;
-- coalesces rapid tab events and applies a 60-second automatic speech cooldown;
-- reacts when the user starts closing tabs again;
+- coalesces rapid tab events so bursts of tabs produce a single evaluation;
+- reacts with relief phrases when the user starts closing tabs again, down to (and including) returning to the configured limit;
+- stays silent once the tab count drops below the limit;
 - follows the browser UI language: Italian for Italian browsers, English everywhere else;
 - keeps a manual Italian/English voice override in the popup;
 - ranks compatible voices installed on the device and avoids known low-quality variants;
+- avoids repeating the same phrase twice in a row (when the phrase pool allows it);
 - shows the current tab count in the extension badge;
 - lets the user choose phrases with a count, without a count, or a mix.
 

@@ -4,8 +4,8 @@ const DEFAULT_STATE = {
   languageMode: 'auto',
   enabled: true,
   totalYells: 0,
-  cooldownUntil: 0,
   lastTabCount: 0,
+  lastPhrase: '',
   phraseMode: 'both'
 };
 
@@ -245,6 +245,13 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// Random pick that avoids repeating the immediately previous template when possible.
+function pickRandomExcluding(arr, exclude) {
+  if (arr.length <= 1) return arr[0];
+  const candidates = arr.filter((item) => item !== exclude);
+  return pickRandom(candidates.length ? candidates : arr);
+}
+
 function getTier(tabCount, threshold) {
   if (tabCount >= threshold + 85) return 'tier6'; // ~100+ tab
   if (tabCount >= threshold + 35) return 'tier5'; // ~50+ tab
@@ -480,7 +487,7 @@ const PHRASES = {
   }
 };
 
-function buildPhrase(tabCount, lang, threshold, type, phraseMode) {
+function buildPhrase(tabCount, lang, threshold, type, phraseMode, lastPhrase = '') {
   const dict = PHRASES[lang] || PHRASES.it;
   const tierKey = type === 'relief' ? 'relief'
                 : isMilestone(tabCount, threshold) ? 'milestones'
@@ -497,7 +504,10 @@ function buildPhrase(tabCount, lang, threshold, type, phraseMode) {
   }
   if (!pool.length) pool = [...(tier.withCount || []), ...(tier.noCount || [])];
 
-  return pickRandom(pool).replaceAll('{count}', String(tabCount));
+  // Avoid repeating the immediately previous phrase; the comparison is on the
+  // template, so phrases that only differ by the {count} number can still be said.
+  const template = pickRandomExcluding(pool, lastPhrase);
+  return { text: template.replaceAll('{count}', String(tabCount)), template };
 }
 
 // ── Core yell logic ─────────────────────────────────────────────────────────
@@ -573,13 +583,13 @@ async function handleYell(direction, force = false) {
 
   if (!type) return false;
 
-  const text = buildPhrase(tabCount, state.language, state.threshold, type, state.phraseMode || 'both');
+  const { text, template } = buildPhrase(tabCount, state.language, state.threshold, type, state.phraseMode || 'both', state.lastPhrase);
   console.log('[TabYell] speaking:', text);
   const spoke = await speak(text, state.language);
 
   if (!spoke) return false;
 
-  const patch = { cooldownUntil: 0 };
+  const patch = { lastPhrase: template };
   if (type === 'yell') patch.totalYells = (state.totalYells || 0) + 1;
   await setState(patch);
 
