@@ -4,13 +4,12 @@ const DEFAULT_STATE = {
   languageMode: 'auto',
   enabled: true,
   totalYells: 0,
-  cooldownUntil: 0,
   lastTabCount: 0,
+  lastPhrase: '',
   phraseMode: 'both'
 };
 
 const AUTOMATIC_YELL_SETTLE_MS = 350;
-const YELL_COOLDOWN_MS = 60_000;
 
 function detectBrowserLanguage() {
   const locale = chrome.i18n.getUILanguage?.()
@@ -244,6 +243,13 @@ async function speak(text, language) {
 
 function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Random pick that avoids repeating the immediately previous template when possible.
+function pickRandomExcluding(arr, exclude) {
+  if (arr.length <= 1) return arr[0];
+  const candidates = arr.filter((item) => item !== exclude);
+  return pickRandom(candidates.length ? candidates : arr);
 }
 
 function getTier(tabCount, threshold) {
@@ -481,7 +487,7 @@ const PHRASES = {
   }
 };
 
-function buildPhrase(tabCount, lang, threshold, type, phraseMode) {
+function buildPhrase(tabCount, lang, threshold, type, phraseMode, lastPhrase = '') {
   const dict = PHRASES[lang] || PHRASES.it;
   const tierKey = type === 'relief' ? 'relief'
                 : isMilestone(tabCount, threshold) ? 'milestones'
@@ -498,7 +504,10 @@ function buildPhrase(tabCount, lang, threshold, type, phraseMode) {
   }
   if (!pool.length) pool = [...(tier.withCount || []), ...(tier.noCount || [])];
 
-  return pickRandom(pool).replaceAll('{count}', String(tabCount));
+  // Avoid repeating the immediately previous phrase; the comparison is on the
+  // template, so phrases that only differ by the {count} number can still be said.
+  const template = pickRandomExcluding(pool, lastPhrase);
+  return { text: template.replaceAll('{count}', String(tabCount)), template };
 }
 
 // ── Core yell logic ─────────────────────────────────────────────────────────
@@ -562,26 +571,25 @@ async function handleYell(direction, force = false) {
   await setState({ lastTabCount: tabCount });
 
   if (!state.enabled) return false;
-  if (!force && Date.now() < state.cooldownUntil) return false;
 
   let type = null;
   if (force) {
     type = 'yell';
-  } else if (direction === 'up' && tabCount >= state.threshold) {
+  } else if (direction === 'up' && tabCount > state.threshold) {
     type = 'yell';
-  } else if (direction === 'down' && state.lastTabCount >= state.threshold) {
+  } else if (direction === 'down' && state.lastTabCount > state.threshold) {
     type = 'relief';
   }
 
   if (!type) return false;
 
-  const text = buildPhrase(tabCount, state.language, state.threshold, type, state.phraseMode || 'both');
+  const { text, template } = buildPhrase(tabCount, state.language, state.threshold, type, state.phraseMode || 'both', state.lastPhrase);
   console.log('[TabYell] speaking:', text);
   const spoke = await speak(text, state.language);
 
   if (!spoke) return false;
 
-  const patch = { cooldownUntil: Date.now() + YELL_COOLDOWN_MS };
+  const patch = { lastPhrase: template };
   if (type === 'yell') patch.totalYells = (state.totalYells || 0) + 1;
   await setState(patch);
 

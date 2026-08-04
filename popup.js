@@ -53,8 +53,8 @@ let currentState = {
   phraseMode: 'both',
   enabled: true,
   totalYells: 0,
-  cooldownUntil: 0,
-  lastTabCount: 0
+  lastTabCount: 0,
+  lastPhrase: ''
 };
 
 function send(message) {

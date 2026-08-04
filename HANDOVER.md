@@ -1,6 +1,6 @@
 # TabYell — Handover
 
-**Versione:** 1.2.0  
+**Versione:** 1.2.2  
 **Brand:** TabYell  
 **Tagline:** Open too many tabs. Your browser yells at you.
 
@@ -9,9 +9,11 @@
 TabYell è un'estensione Chrome Manifest V3 che conta le tab aperte e interviene con frasi vocali sarcastiche quando l'utente supera una soglia configurabile.
 
 - apertura sopra soglia → battuta vocale;
-- chiusura mentre si era sopra soglia → frase di sollievo;
+- chiusura mentre si era sopra o esattamente al limite → frase di sollievo, fino al rientro al valore di soglia;
+- sotto soglia le chiusure restano silenziose;
 - eventi rapidi accorpati in una sola valutazione;
-- cooldown automatico di 60 secondi;
+- nessun cooldown tra frasi: ogni evento separato sopra soglia produce una frase;
+- niente ripetizioni consecutive: la frase appena detta non viene riusata alla frase successiva (quando il pool lo consente);
 - badge verde, arancione o rosso con il numero di tab;
 - popup con contatore, soglia, lingua, stile delle frasi e attivazione rapida;
 - interfaccia e frasi disponibili in italiano e inglese;
@@ -44,12 +46,12 @@ chrome.tabs.onCreated/onRemoved
         ↓
 debounce 350 ms e accorpamento eventi
         ↓
-controllo soglia e cooldown
+controllo soglia (sopra/al limite vs sotto)
         ↓
 selezione voce e chrome.tts.speak
 ```
 
-Il pulsante `YELL_NOW` bypassa il cooldown, annulla l'evento automatico pendente e riceve risposta immediata nel popup. Gli eventi automatici non possono accumulare un backlog: viene conservata al massimo una direzione pendente.
+Il pulsante `YELL_NOW` annulla l'evento automatico pendente e riceve risposta immediata nel popup. Gli eventi automatici non possono accumulare un backlog: viene conservata al massimo una direzione pendente. Non esiste più un cooldown di 60 secondi: ogni evento separato sopra soglia produce una frase.
 
 ## Stato persistito
 
@@ -60,8 +62,8 @@ Il pulsante `YELL_NOW` bypassa il cooldown, annulla l'evento automatico pendente
   languageMode: 'auto',
   enabled: true,
   totalYells: 0,
-  cooldownUntil: 0,
   lastTabCount: 0,
+  lastPhrase: '',
   phraseMode: 'both'
 }
 ```
@@ -87,13 +89,15 @@ Il service worker registra nome, lingua e natura locale/remota della voce scelta
 3. Caricare la cartella da `chrome://extensions` in modalità sviluppatore.
 4. Verificare l'upgrade sopra una versione già installata e la migrazione del contatore.
 5. Aprire rapidamente molte tab e confermare che parta una sola frase.
-6. Confermare che durante il cooldown non partano nuove frasi automatiche.
-7. Provare un browser italiano e uno non italiano, la modalità automatica e gli override manuali.
-8. Premere **Sgridami adesso** e verificare feedback immediato e priorità sulla voce automatica.
-9. Controllare nel log del service worker quale voce TTS è stata scelta.
-10. Provare tutte le modalità delle frasi e verificare badge, soglia e toggle.
-11. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
-12. Pubblicare la versione 1.2.0 mantenendo lo stesso extension ID.
+6. Aprire poi tab singole distanziate sopra soglia e confermare che parta una frase per ogni apertura.
+7. Chiudere tab fino al limite e confermare le frasi di sollievo, restando mute sotto il limite.
+8. Provare un browser italiano e uno non italiano, la modalità automatica e gli override manuali.
+9. Premere **Sgridami adesso** e verificare feedback immediato e priorità sulla voce automatica.
+10. Controllare nel log del service worker quale voce TTS è stata scelta.
+11. Provare tutte le modalità delle frasi e verificare badge, soglia e toggle.
+12. Aprire/chiudere tab in sequenza sopra soglia e confermare che la stessa frase non si ripeta due volte di fila.
+13. Preparare screenshot e testi Chrome Web Store con il nome TabYell.
+14. Pubblicare la versione 1.2.2 mantenendo lo stesso extension ID.
 
 ## Identità
 
