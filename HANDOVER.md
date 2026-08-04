@@ -32,9 +32,6 @@ popup.js            Stato e interazioni del popup
 _locales/           Cataloghi inglese e italiano
 icons/              Icone dell'estensione
 tests/              Validazione statica e test del service worker
-content.js          Placeholder non registrato nel manifest
-offscreen.js        Implementazione speechSynthesis legacy, non registrata
-voices/phrases.js   Raccolta frasi legacy, non caricata dal manifest
 ```
 
 ## Architettura vocale
