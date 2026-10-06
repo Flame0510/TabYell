@@ -2,6 +2,8 @@
 
 > Open too many tabs. Your browser yells at you.
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/tabyell/pfjopppmofpnnbdophhconjmhjnpfhkh?hl=it)**
+
 TabYell is a deliberately dramatic Chrome extension that counts your open tabs and calls you out with sarcastic voice lines when things get out of hand.
 
 ## What it does
